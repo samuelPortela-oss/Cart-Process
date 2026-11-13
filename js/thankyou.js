@@ -30,16 +30,7 @@ function getOrder() {
     }
 }
 
-// Convertir precio en texto a número: "$6.500" -> 6500 (pesos colombianos)
-function parsePrice(text) {
-    const digits = String(text).replace(/\D/g, "");
-    return digits === "" ? 0 : parseInt(digits, 10);
-}
-
-// Convertir número a texto con formato de dinero: 6500 -> "$6.500"
-function formatMoney(value) {
-    return "$" + Math.round(value).toLocaleString("es-CO");
-}
+// parsePrice() y formatMoney() vienen de js/datos.js
 
 function clearCart() {
     localStorage.removeItem("cart");

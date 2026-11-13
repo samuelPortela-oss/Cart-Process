@@ -53,16 +53,7 @@ function saveCart(cart) {
     localStorage.setItem("cart", JSON.stringify(cart));
 }
 
-// Convertir precio en texto a número: "$6.500" -> 6500 (pesos colombianos)
-function parsePrice(text) {
-    const digits = String(text).replace(/\D/g, "");
-    return digits === "" ? 0 : parseInt(digits, 10);
-}
-
-// Convertir número a texto con formato de dinero: 6500 -> "$6.500"
-function formatMoney(value) {
-    return "$" + Math.round(value).toLocaleString("es-CO");
-}
+// parsePrice() y formatMoney() vienen de js/datos.js
 
 // GUARDAR el resumen de la orden (checkout.html lo leerá)
 function saveSummary(summary) {
@@ -154,7 +145,15 @@ cartTableBody.addEventListener("click", (event) => {
     if (action === "remove") {
         newCart = cart.filter((item) => item.id !== id);
     } else {
-        if (action === "increase") product.quantity += 1;
+        if (action === "increase") {
+            // No dejamos pedir más unidades de las que hay en stock
+            const stock = getData("productos").find((p) => p.id === product.productoId);
+            if (stock && product.quantity + 1 > stock.stock) {
+                alert(`Solo quedan ${stock.stock} unidades de ${product.name}.`);
+                return;
+            }
+            product.quantity += 1;
+        }
         if (action === "decrease") product.quantity -= 1;
 
         // Si la cantidad llega a 0, el producto se va del carrito

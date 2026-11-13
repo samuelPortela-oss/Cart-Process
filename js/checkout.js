@@ -54,16 +54,7 @@ function getSummary() {
     }
 }
 
-// Convertir precio en texto a número: "$6.500" -> 6500 (pesos colombianos)
-function parsePrice(text) {
-    const digits = String(text).replace(/\D/g, "");
-    return digits === "" ? 0 : parseInt(digits, 10);
-}
-
-// Convertir número a texto con formato de dinero: 6500 -> "$6.500"
-function formatMoney(value) {
-    return "$" + Math.round(value).toLocaleString("es-CO");
-}
+// parsePrice() y formatMoney() vienen de js/datos.js
 
 // GUARDAR la orden confirmada (thankyou.html la leerá)
 function saveOrder(order) {
@@ -158,6 +149,61 @@ function validateForm() {
     return true;
 }
 
+// Guardar la compra en los casilleros del Dashboard ("clientes" y "pedidos")
+function registerOrderInDashboard(order, feePercent) {
+    // Cliente: si ya existe (mismo email) lo actualizamos, si no lo creamos
+    const clientes = getData("clientes");
+    const datosCliente = {
+        nombre: order.customer.firstName,
+        apellido: order.customer.lastName,
+        email: order.customer.email,
+        celular: order.customer.phone,
+        direccion: order.customer.address,
+        direccion2: order.customer.address2,
+        descripcion: order.customer.note,
+    };
+    let cliente = clientes.find(
+        (c) => c.email.toLowerCase() === datosCliente.email.toLowerCase()
+    );
+    if (cliente) {
+        Object.assign(cliente, datosCliente);
+    } else {
+        cliente = { id: nextId(clientes), ...datosCliente };
+        clientes.push(cliente);
+    }
+    saveData("clientes", clientes);
+
+    // Pedido: mismos campos que los pedidos creados desde el Dashboard
+    const summary = order.summary;
+    const subtotal = summary.subtotal || 0;
+    const items = order.products.map((product) => ({
+        productoId: product.productoId,
+        nombre: product.name,
+        precio: parsePrice(product.price),
+        cantidad: product.quantity,
+    }));
+    const total = (summary.total || 0) * (1 + feePercent);
+
+    const pedidos = getData("pedidos");
+    pedidos.push({
+        id: nextId(pedidos),
+        numero: order.number,
+        clienteId: cliente.id,
+        fecha: new Date().toISOString().slice(0, 10),
+        metodoPago: order.payment,
+        productos: items,
+        descuento: summary.discount || 0,
+        // Domicilio + recargo del método de pago
+        aumento: Math.round(total - subtotal + (summary.discount || 0)),
+        total: Math.round(total),
+        estado: "Pendiente",
+        origen: "Tienda",
+    });
+    saveData("pedidos", pedidos);
+
+    descontarStock(items.filter((item) => item.productoId));
+}
+
 // ============================================================
 // EVENTOS
 // ============================================================
@@ -198,6 +244,9 @@ checkoutBtn.addEventListener("click", () => {
 
     // Guardamos la orden y navegamos; thankyou.html vacía el carrito al cargar
     saveOrder(order);
+
+    // Fusión con el Dashboard: el cliente y el pedido quedan en sus módulos
+    registerOrderInDashboard(order, PAYMENT_FEES[selected.value] || 0);
 
     window.location.href = "thankyou.html";
 });

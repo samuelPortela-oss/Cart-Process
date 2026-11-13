@@ -4,7 +4,7 @@
 // ============================================================
 
 // --- Variables globales ---
-const btnProducts = document.querySelectorAll(".btn-product");
+const productsGrid = document.querySelector(".content-pro"); // solo existe en index.html
 const cartCount = document.querySelector(".contar-pro");
 const cartList = document.querySelector(".list-cart");
 const cartIcon = document.querySelector(".carrito");
@@ -78,29 +78,68 @@ function updateCartCount() {
 // ACCIONES
 // ============================================================
 
-// Agregar un producto al carrito
-function addCart(btn) {
-    // closest() sube al ancestro .card (más seguro que parentElement x3)
-    const card = btn.closest(".card");
-    const image = card.querySelector("img").getAttribute("src");
+// Pintar las tarjetas de productos desde localStorage "productos" (datos.js)
+// El Dashboard es quien crea / edita / elimina estos productos
+function renderProducts() {
+    const productos = getData("productos");
+    productsGrid.innerHTML = "";
 
-    const product = {
-        id: image, // la imagen es el identificador único del producto
-        name: card.querySelector("h3").textContent,
-        price: card.querySelector("h5").textContent.trim(),
-        image: image,
-        quantity: 1,
-    };
+    if (productos.length === 0) {
+        productsGrid.innerHTML = '<p class="lead text-center">No hay productos disponibles.</p>';
+        return;
+    }
+
+    productos.forEach((producto) => {
+        const agotado = producto.stock <= 0;
+        const col = document.createElement("div");
+        col.className = "col-md-3 py-3 py-md-0";
+        col.innerHTML = `
+            <div class="card">
+                <img src="${escapeHtml(resolveImg(producto.imagen))}" alt="${escapeHtml(producto.nombre)}">
+                <div class="card-body">
+                    <h3>${escapeHtml(producto.nombre)}</h3>
+                    <p>${escapeHtml(producto.descripcion)}</p>
+                    <h5>${formatMoney(producto.precio)}
+                        ${agotado
+                            ? '<span class="btn-product" style="opacity: 0.5; cursor: not-allowed;">Agotado</span>'
+                            : `<span class="btn-product" data-producto="${producto.id}"><i class="fa-solid fa-basket-shopping"></i></span>`}
+                    </h5>
+                </div>
+            </div>
+        `;
+        productsGrid.appendChild(col);
+    });
+}
+
+// Agregar un producto al carrito (a partir de su id en "productos")
+function addCart(productoId) {
+    const producto = getData("productos").find((p) => p.id === productoId);
+    if (!producto) return;
 
     const cart = getCart();
-    const existing = cart.find((item) => item.id === product.id);
+    // id como texto: detalleCarrito.js lo compara con el data-id de los botones
+    const existing = cart.find((item) => item.id === String(producto.id));
+    const enCarrito = existing ? existing.quantity : 0;
+
+    // No dejamos pedir más unidades de las que hay en stock
+    if (enCarrito + 1 > producto.stock) {
+        alert(`Solo quedan ${producto.stock} unidades de ${producto.nombre}.`);
+        return;
+    }
 
     if (existing) {
         // Ya estaba: solo aumentamos la cantidad (no duplicamos filas)
         existing.quantity += 1;
     } else {
         // Producto nuevo: lo agregamos al array
-        cart.push(product);
+        cart.push({
+            id: String(producto.id),
+            productoId: producto.id,
+            name: producto.nombre,
+            price: formatMoney(producto.precio),
+            image: resolveImg(producto.imagen),
+            quantity: 1,
+        });
     }
 
     saveCart(cart);
@@ -111,10 +150,15 @@ function addCart(btn) {
 // EVENTOS
 // ============================================================
 
-// Agregar producto (un listener por botón; los 12 existen al cargar)
-btnProducts.forEach((btn) => {
-    btn.addEventListener("click", () => addCart(btn));
-});
+// Agregar producto con delegación de eventos: las tarjetas se crean
+// dinámicamente, así que escuchamos en el contenedor .content-pro
+if (productsGrid) {
+    productsGrid.addEventListener("click", (event) => {
+        const btn = event.target.closest(".btn-product");
+        if (!btn) return;
+        addCart(Number(btn.getAttribute("data-producto")));
+    });
+}
 
 // Eliminar productos con delegación de eventos:
 // un solo listener en el tbody resuelve los clics de cualquier botón X,
@@ -135,5 +179,6 @@ cartIcon.addEventListener("click", () => {
     cartList.classList.toggle("ocultar");
 });
 
-// --- Al cargar la página: mostrar lo que quedó guardado ---
+// --- Al cargar la página: pintar productos y lo que quedó guardado ---
+if (productsGrid) renderProducts();
 renderCart();
